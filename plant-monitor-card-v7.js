@@ -43,6 +43,9 @@ class PlantMonitorCard extends HTMLElement {
       const temperatureState = plant.temperature_entity ? this._hass.states[plant.temperature_entity] : null;
       const batteryState = plant.battery_entity ? this._hass.states[plant.battery_entity] : null;
       const irrigationState = plant.irrigation_switch ? this._hass.states[plant.irrigation_switch] : null;
+      const uvState = plant.uv_entity ? this._hass.states[plant.uv_entity] : null;
+      const ambientTempState = plant.ambient_temp_entity ? this._hass.states[plant.ambient_temp_entity] : null;
+      const soilTempState = plant.soil_temp_entity ? this._hass.states[plant.soil_temp_entity] : null;
 
       // Verifica se algum dos sensores essenciais está indisponível
       if (!moistureState) {
@@ -57,6 +60,9 @@ class PlantMonitorCard extends HTMLElement {
       const moisture = parseFloat(moistureState.state);
       const temperature = temperatureState ? parseFloat(temperatureState.state) : null;
       const battery = batteryState ? parseFloat(batteryState.state) : null;
+      const uv = uvState ? parseFloat(uvState.state) : null;
+      const ambientTemp = ambientTempState ? parseFloat(ambientTempState.state) : null;
+      const soilTemp = soilTempState ? parseFloat(soilTempState.state) : null;
 
       // Determina o status baseado na umidade
       let status = 'ok';
@@ -89,6 +95,9 @@ class PlantMonitorCard extends HTMLElement {
         moisture,
         temperature,
         battery,
+        uv,
+        ambientTemp,
+        soilTemp,
         status,
         batteryStatus,
         needsWater: moisture < 40,
@@ -302,6 +311,18 @@ class PlantMonitorCard extends HTMLElement {
         color: var(--plant-critical-color);
       }
       
+      .uv ha-icon {
+        color: #9C27B0;
+      }
+      
+      .ambient-temp ha-icon {
+        color: #FF9800;
+      }
+      
+      .soil-temp ha-icon {
+        color: #795548;
+      }
+      
       .plant-action {
         margin-left: 16px;
       }
@@ -410,6 +431,36 @@ class PlantMonitorCard extends HTMLElement {
               <div class="sensor battery ${batteryClass}">
                 <ha-icon icon="${this._getBatteryIcon(plant.battery)}"></ha-icon>
                 <span>${plant.battery.toFixed(0)}%</span>
+              </div>
+            `;
+          }
+          
+          // Sensor de UV (opcional)
+          if (plant.uv !== null) {
+            sensorsHtml += `
+              <div class="sensor uv">
+                <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
+                <span>${plant.uv.toFixed(1)} UV</span>
+              </div>
+            `;
+          }
+          
+          // Sensor de temperatura ambiente (opcional)
+          if (plant.ambientTemp !== null) {
+            sensorsHtml += `
+              <div class="sensor ambient-temp">
+                <ha-icon icon="mdi:home-thermometer"></ha-icon>
+                <span>${plant.ambientTemp.toFixed(1)}°C</span>
+              </div>
+            `;
+          }
+          
+          // Sensor de temperatura do solo (opcional)
+          if (plant.soilTemp !== null) {
+            sensorsHtml += `
+              <div class="sensor soil-temp">
+                <ha-icon icon="mdi:thermometer-chevron-down"></ha-icon>
+                <span>${plant.soilTemp.toFixed(1)}°C</span>
               </div>
             `;
           }
@@ -540,12 +591,18 @@ class PlantMonitorCardEditor extends HTMLElement {
         let temperatureOptions = '<option value="">Nenhum</option>';
         let batteryOptions = '<option value="">Nenhum</option>';
         let irrigationOptions = '<option value="">Nenhum</option>';
+        let uvOptions = '<option value="">Nenhum</option>';
+        let ambientTempOptions = '<option value="">Nenhum</option>';
+        let soilTempOptions = '<option value="">Nenhum</option>';
         
         // Popula opções de sensores
         sensorEntities.forEach(entity => {
           moistureOptions += `<option value="${entity}" ${plant.moisture_entity === entity ? 'selected' : ''}>${entity}</option>`;
           temperatureOptions += `<option value="${entity}" ${plant.temperature_entity === entity ? 'selected' : ''}>${entity}</option>`;
           batteryOptions += `<option value="${entity}" ${plant.battery_entity === entity ? 'selected' : ''}>${entity}</option>`;
+          uvOptions += `<option value="${entity}" ${plant.uv_entity === entity ? 'selected' : ''}>${entity}</option>`;
+          ambientTempOptions += `<option value="${entity}" ${plant.ambient_temp_entity === entity ? 'selected' : ''}>${entity}</option>`;
+          soilTempOptions += `<option value="${entity}" ${plant.soil_temp_entity === entity ? 'selected' : ''}>${entity}</option>`;
         });
         
         // Popula opções de switches
@@ -597,6 +654,27 @@ class PlantMonitorCardEditor extends HTMLElement {
             </div>
             
             <div class="input-row">
+              <label>Irradiação UV:</label>
+              <select class="uv-select" data-index="${index}">
+                ${uvOptions}
+              </select>
+            </div>
+            
+            <div class="input-row">
+              <label>Temperatura Ambiente:</label>
+              <select class="ambient-temp-select" data-index="${index}">
+                ${ambientTempOptions}
+              </select>
+            </div>
+            
+            <div class="input-row">
+              <label>Temperatura do Solo:</label>
+              <select class="soil-temp-select" data-index="${index}">
+                ${soilTempOptions}
+              </select>
+            </div>
+            
+            <div class="input-row">
               <label>Switch de Irrigação:</label>
               <select class="irrigation-select" data-index="${index}">
                 ${irrigationOptions}
@@ -626,7 +704,7 @@ class PlantMonitorCardEditor extends HTMLElement {
         }
         
         .input-row label {
-          flex: 0 0 120px;
+          flex: 0 0 150px;
           font-weight: 500;
         }
         
@@ -761,7 +839,10 @@ class PlantMonitorCardEditor extends HTMLElement {
           moisture_entity: '',
           temperature_entity: '',
           battery_entity: '',
-          irrigation_switch: ''
+          irrigation_switch: '',
+          uv_entity: '',
+          ambient_temp_entity: '',
+          soil_temp_entity: ''
         });
         
         this._updateConfig({ plants: this._config.plants });
@@ -817,6 +898,30 @@ class PlantMonitorCardEditor extends HTMLElement {
       });
     });
     
+    this.shadowRoot.querySelectorAll('.uv-select').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const index = parseInt(e.target.getAttribute('data-index'));
+        this._config.plants[index].uv_entity = e.target.value || null;
+        this._updateConfig({ plants: this._config.plants });
+      });
+    });
+    
+    this.shadowRoot.querySelectorAll('.ambient-temp-select').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const index = parseInt(e.target.getAttribute('data-index'));
+        this._config.plants[index].ambient_temp_entity = e.target.value || null;
+        this._updateConfig({ plants: this._config.plants });
+      });
+    });
+    
+    this.shadowRoot.querySelectorAll('.soil-temp-select').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const index = parseInt(e.target.getAttribute('data-index'));
+        this._config.plants[index].soil_temp_entity = e.target.value || null;
+        this._updateConfig({ plants: this._config.plants });
+      });
+    });
+    
     this.shadowRoot.querySelectorAll('.irrigation-select').forEach(select => {
       select.addEventListener('change', (e) => {
         const index = parseInt(e.target.getAttribute('data-index'));
@@ -824,39 +929,3 @@ class PlantMonitorCardEditor extends HTMLElement {
         this._updateConfig({ plants: this._config.plants });
       });
     });
-    
-    // Botões para remover plantas
-    this.shadowRoot.querySelectorAll('.remove-button').forEach(button => {
-      button.addEventListener('click', (e) => {
-        const index = parseInt(e.target.getAttribute('data-index'));
-        this._config.plants.splice(index, 1);
-        this._updateConfig({ plants: this._config.plants });
-      });
-    });
-  }
-
-  _updateConfig(updates) {
-    const newConfig = { ...this._config, ...updates };
-    
-    const event = new CustomEvent('config-changed', {
-      detail: { config: newConfig },
-      bubbles: true,
-      composed: true,
-    });
-    
-    this.dispatchEvent(event);
-  }
-}
-
-// Registra os elementos personalizados
-customElements.define('plant-monitor-card', PlantMonitorCard);
-customElements.define('plant-monitor-card-editor', PlantMonitorCardEditor);
-
-// Informa ao Home Assistant que este cartão possui um editor
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: 'plant-monitor-card',
-  name: 'Plant Monitor Card',
-  description: 'Cartão para monitorar sensores de plantas',
-  preview: true
-});
