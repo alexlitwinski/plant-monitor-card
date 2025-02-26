@@ -1,3 +1,8 @@
+if (!customElements.get('card-tools')) {
+  customElements.define('plant-monitor-card', class extends HTMLElement {
+    setConfig() { throw new Error("Dependência card-tools não encontrada. Instale via HACS."); }
+  });
+}
 import { LitElement, html, css } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 
