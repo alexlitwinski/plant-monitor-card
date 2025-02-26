@@ -339,6 +339,8 @@ class PlantMonitorCard extends HTMLElement {
         align-items: center;
         justify-content: center;
         transition: all 0.2s ease;
+        padding: 0 12px; /* Adicionar padding */
+        z-index: 10; /* Garantir que está acima de outros elementos */
       }
       
       .action-button.active {
@@ -470,11 +472,12 @@ class PlantMonitorCard extends HTMLElement {
         let actionButtonHtml = '';
         if (plant.irrigation_switch && !plant.error) {
           actionButtonHtml = `
-            <div class="plant-action">
-              <button class="action-button ${plant.isIrrigating ? 'active' : ''}" data-switch="${plant.irrigation_switch}">
-                <ha-icon icon="${plant.isIrrigating ? 'mdi:water' : 'mdi:watering-can'}"></ha-icon>
-              </button>
-            </div>
+          <div class="plant-action">
+            <button class="action-button ${plant.isIrrigating ? 'active' : ''}" data-switch="${plant.irrigation_switch}" style="width: auto; padding: 0 12px; border-radius: 20px;">
+              <ha-icon icon="${plant.isIrrigating ? 'mdi:water' : 'mdi:watering-can'}"></ha-icon>
+              <span style="margin-left: 4px;">${plant.isIrrigating ? 'Regando' : 'Irrigar'}</span>
+            </button>
+          </div>
           `;
         }
         
