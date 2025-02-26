@@ -1,0 +1,7 @@
+{
+  "name": "Plant Monitor Card",
+  "render_readme": true,
+  "filename": "plant-monitor-card.js",
+  "content_in_root": false,
+  "homeassistant": "2023.1.0"
+}
