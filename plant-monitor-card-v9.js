@@ -101,7 +101,9 @@ class PlantMonitorCard extends HTMLElement {
         status,
         batteryStatus,
         needsWater: moisture < 40,
-        isIrrigating
+        isIrrigating,
+        // Armazena a entidade para referência, mesmo que não encontrada
+        irrigationState: irrigationState
       };
     });
   }
@@ -137,16 +139,23 @@ class PlantMonitorCard extends HTMLElement {
     this.dispatchEvent(event);
   }
 
-  _handleIrrigation(switchEntity) {
-    if (!switchEntity || !this._hass) return;
+  _handleIrrigation(plantIndex) {
+    if (plantIndex < 0 || plantIndex >= this._plants.length) return;
     
-    const state = this._hass.states[switchEntity];
-    if (!state) return;
+    const plant = this._plants[plantIndex];
+    if (!plant.irrigation_switch || !this._hass) return;
+    
+    const state = this._hass.states[plant.irrigation_switch];
+    if (!state) {
+      console.warn(`Entidade de irrigação não encontrada: ${plant.irrigation_switch}`);
+      return;
+    }
     
     const isOn = state.state === 'on';
+    console.log(`Alterando irrigação para ${isOn ? 'OFF' : 'ON'} na planta ${plant.name}`);
     
     this._hass.callService('switch', isOn ? 'turn_off' : 'turn_on', {
-      entity_id: switchEntity
+      entity_id: plant.irrigation_switch
     });
   }
 
@@ -235,11 +244,66 @@ class PlantMonitorCard extends HTMLElement {
         justify-content: center;
         background-color: rgba(0, 0, 0, 0.1);
         flex-shrink: 0;
+        position: relative;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      
+      .plant-image.can-irrigate:hover {
+        transform: scale(1.05);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      }
+      
+      .plant-image.irrigating {
+        box-shadow: 0 0 0 4px var(--plant-ok-color);
       }
       
       .plant-image ha-icon {
         --mdc-icon-size: 40px;
         color: var(--icon-color);
+      }
+      
+      /* Animação de irrigação */
+      @keyframes waterDrop {
+        0% {
+          transform: translateY(-15px) translateX(-5px) scale(0);
+          opacity: 0.7;
+        }
+        50% {
+          transform: translateY(0px) translateX(0px) scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: translateY(15px) translateX(5px) scale(0);
+          opacity: 0.7;
+        }
+      }
+      
+      .water-drop {
+        position: absolute;
+        background-color: #03A9F4;
+        width: 6px;
+        height: 8px;
+        border-radius: 50%;
+        opacity: 0;
+      }
+      
+      .water-drop-1 {
+        top: 10px;
+        left: 25px;
+        animation: waterDrop 1.5s infinite;
+      }
+      
+      .water-drop-2 {
+        top: 5px;
+        left: 40px;
+        animation: waterDrop 1.7s infinite 0.3s;
+      }
+      
+      .water-drop-3 {
+        top: 8px;
+        left: 35px;
+        animation: waterDrop 1.6s infinite 0.6s;
       }
       
       .plant-details {
@@ -323,33 +387,28 @@ class PlantMonitorCard extends HTMLElement {
         color: #795548;
       }
       
-      .plant-action {
-        margin-left: 16px;
-      }
-      
-      .action-button {
-        background: var(--primary-color);
+      .irrigation-status {
+        position: absolute;
+        bottom: -4px;
+        right: -4px;
+        background-color: var(--primary-color);
         color: white;
-        border: none;
         border-radius: 50%;
-        width: 36px;
-        height: 36px;
-        cursor: pointer;
+        width: 24px;
+        height: 24px;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.2s ease;
-        padding: 0 12px; /* Adicionar padding */
-        z-index: 10; /* Garantir que está acima de outros elementos */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
       }
       
-      .action-button.active {
-        background: var(--plant-ok-color);
+      .irrigation-status ha-icon {
+        --mdc-icon-size: 14px;
+        color: white;
       }
       
-      .action-button:hover {
-        transform: scale(1.1);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      .irrigation-status.active {
+        background-color: var(--plant-ok-color);
       }
       
       .stats-container {
@@ -391,11 +450,14 @@ class PlantMonitorCard extends HTMLElement {
     let plantsHtml = '';
     
     if (this._plants && this._plants.length > 0) {
-      this._plants.forEach(plant => {
+      this._plants.forEach((plant, index) => {
         // Define classes de status
         const plantCardClass = plant.status || 'ok';
         const moistureClass = plant.status || 'ok';
         const batteryClass = plant.battery !== null ? (plant.batteryStatus || 'ok') : '';
+        
+        // Determina se podemos irrigar essa planta
+        const canIrrigate = !!plant.irrigation_switch;
         
         // Prepara estilo de imagem
         let plantImageStyle = '';
@@ -468,24 +530,38 @@ class PlantMonitorCard extends HTMLElement {
           }
         }
         
-        // Botão de ação (irrigação)
-        let actionButtonHtml = '';
-        if (plant.irrigation_switch && !plant.error) {
-          actionButtonHtml = `
-          <div class="plant-action">
-            <button class="action-button ${plant.isIrrigating ? 'active' : ''}" data-switch="${plant.irrigation_switch}" style="width: auto; padding: 0 12px; border-radius: 20px;">
+        // Animação de irrigação e ícone de status
+        let irrigationAnimation = '';
+        let irrigationStatus = '';
+        
+        if (canIrrigate) {
+          // Adiciona o ícone de status na imagem da planta
+          irrigationStatus = `
+            <div class="irrigation-status ${plant.isIrrigating ? 'active' : ''}" title="${plant.isIrrigating ? 'Irrigando' : 'Irrigação desligada'}">
               <ha-icon icon="${plant.isIrrigating ? 'mdi:water' : 'mdi:watering-can'}"></ha-icon>
-              <span style="margin-left: 4px;">${plant.isIrrigating ? 'Regando' : 'Irrigar'}</span>
-            </button>
-          </div>
+            </div>
           `;
+          
+          // Adiciona a animação de gotas de água se estiver irrigando
+          if (plant.isIrrigating) {
+            irrigationAnimation = `
+              <div class="water-drop water-drop-1"></div>
+              <div class="water-drop water-drop-2"></div>
+              <div class="water-drop water-drop-3"></div>
+            `;
+          }
         }
         
         plantsHtml += `
           <div class="plant-card ${plantCardClass}">
             <div class="plant-info">
-              <div class="plant-image" style="${plantImageStyle}">
+              <div class="plant-image ${canIrrigate ? 'can-irrigate' : ''} ${plant.isIrrigating ? 'irrigating' : ''}" 
+                   style="${plantImageStyle}" 
+                   data-plant-index="${index}" 
+                   title="${canIrrigate ? (plant.isIrrigating ? 'Clique para parar a irrigação' : 'Clique para iniciar a irrigação') : ''}">
                 ${!plant.image ? '<ha-icon icon="mdi:flower"></ha-icon>' : ''}
+                ${irrigationAnimation}
+                ${irrigationStatus}
               </div>
               
               <div class="plant-details">
@@ -496,8 +572,6 @@ class PlantMonitorCard extends HTMLElement {
                   ${sensorsHtml}
                 </div>
               </div>
-              
-              ${actionButtonHtml}
             </div>
           </div>
         `;
@@ -510,6 +584,7 @@ class PlantMonitorCard extends HTMLElement {
       const needWaterCount = this._plants.filter(p => p.needsWater && !p.error).length;
       const healthyCount = this._plants.filter(p => p.status === 'ok').length;
       const lowBatteryCount = this._plants.filter(p => p.battery !== null && p.batteryStatus === 'critical').length;
+      const irrigatingCount = this._plants.filter(p => p.isIrrigating).length;
       
       statsHtml = `
         <div class="stats-container">
@@ -526,6 +601,10 @@ class PlantMonitorCard extends HTMLElement {
             <div class="stat-item">
               <div class="stat-value">${lowBatteryCount}</div>
               <div class="stat-label">Bateria Baixa</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${irrigatingCount}</div>
+              <div class="stat-label">Irrigando</div>
             </div>
           </div>
         </div>
@@ -546,12 +625,12 @@ class PlantMonitorCard extends HTMLElement {
       </ha-card>
     `;
     
-    // Adiciona eventos aos botões de ação
-    this.shadowRoot.querySelectorAll('.action-button').forEach(button => {
-      button.addEventListener('click', () => {
-        const switchEntity = button.getAttribute('data-switch');
-        if (switchEntity) {
-          this._handleIrrigation(switchEntity);
+    // Adiciona eventos aos botões de ação (imagens das plantas)
+    this.shadowRoot.querySelectorAll('.plant-image.can-irrigate').forEach(plantImage => {
+      plantImage.addEventListener('click', () => {
+        const plantIndex = parseInt(plantImage.getAttribute('data-plant-index'));
+        if (!isNaN(plantIndex)) {
+          this._handleIrrigation(plantIndex);
         }
       });
     });
@@ -969,7 +1048,4 @@ window.customCards.push({
   preview: true
 });
 
-console.log("Plant Monitor Card v7 carregado com sucesso! Versão: 7.0.0");
-
-
-                             
+console.log("Plant Monitor Card v8 carregado com sucesso! Versão: 8.0.0");
