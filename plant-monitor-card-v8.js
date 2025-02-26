@@ -929,3 +929,44 @@ class PlantMonitorCardEditor extends HTMLElement {
         this._updateConfig({ plants: this._config.plants });
       });
     });
+    
+    // Botões para remover plantas
+    this.shadowRoot.querySelectorAll('.remove-button').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const index = parseInt(e.target.getAttribute('data-index'));
+        this._config.plants.splice(index, 1);
+        this._updateConfig({ plants: this._config.plants });
+      });
+    });
+  }
+
+  _updateConfig(updates) {
+    const newConfig = { ...this._config, ...updates };
+    
+    const event = new CustomEvent('config-changed', {
+      detail: { config: newConfig },
+      bubbles: true,
+      composed: true,
+    });
+    
+    this.dispatchEvent(event);
+  }
+}
+
+// Registra os elementos personalizados
+customElements.define('plant-monitor-card', PlantMonitorCard);
+customElements.define('plant-monitor-card-editor', PlantMonitorCardEditor);
+
+// Informa ao Home Assistant que este cartão possui um editor
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'plant-monitor-card',
+  name: 'Plant Monitor Card',
+  description: 'Cartão para monitorar sensores de plantas',
+  preview: true
+});
+
+console.log("Plant Monitor Card v7 carregado com sucesso! Versão: 7.0.0");
+
+
+                             
